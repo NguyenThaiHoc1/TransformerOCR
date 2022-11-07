@@ -1,14 +1,14 @@
 .idea
-DatasetCompressPKL
+DatasetCompressPKL/*
 !DatasetCompressPKL/.gitkeep
 
-DatasetRaw
+DatasetRaw/*
 !DatasetRaw/.gitkeep
 
-logs_training
+logs_training/*
 !logs_training/.gitkeep
 
-DatasetTFrecord
+DatasetTFrecord/*
 !DatasetTFrecord/.gitkeep
 
 other
