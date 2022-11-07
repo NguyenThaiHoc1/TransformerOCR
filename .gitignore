@@ -1,0 +1,14 @@
+.idea
+DatasetCompressPKL
+!DatasetCompressPKL/.gitkeep
+
+DatasetRaw
+!DatasetRaw/.gitkeep
+
+logs_training
+!logs_training/.gitkeep
+
+DatasetTFrecord
+!DatasetTFrecord/.gitkeep
+
+other
