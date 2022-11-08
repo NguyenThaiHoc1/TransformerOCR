@@ -292,8 +292,9 @@ class TFTrainer(BaseTrainer):
             progress_bar = tqdm(total=steps_per_epoch, initial=initial_step,
                                 ascii="->", colour='#1cd41c')
 
-            # for index in range(initial_step, steps_per_epoch):
-            for batch_idx_train, data in enumerate(self.train_dataloader.dataset):
+            for index in range(initial_step, steps_per_epoch):
+                data = self.train_dataloader.next_batch()
+            # for batch_idx_train, data in enumerate(self.train_dataloader.dataset):
                 batch_loss = self._train_step(data)
 
                 # update metrics

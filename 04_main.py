@@ -13,7 +13,7 @@ if __name__ == '__main__':
     vocab_size = get_vocab_from_huggingface(name_model=cfg_training.MODEL_TOKENIZER)
 
     train_dataset = Dataset(record_path='./DatasetTFrecord/archiscribe-corpus/all_archiscribe.tfrec')
-    train_dataset.load_tfrecord(repeat=False, batch_size=cfg_training.BATCH_SIZE)
+    train_dataset.load_tfrecord(repeat=True, batch_size=cfg_training.BATCH_SIZE)
 
     model = TotalModel(name="AttentionOCR-Model",
                        name_embedding_for_image=cfg_training.IMAGES_EMBEDDING_TYPE,
