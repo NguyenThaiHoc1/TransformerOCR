@@ -261,7 +261,7 @@ class TFTrainer(BaseTrainer):
             cnt_true_str = 0
             sum_char = 0
             sum_str = 0
-            for batch, data in tqdm(enumerate(self.train_dataloader.dataset)):
+            for batch, data in tqdm(enumerate(self.train_dataloader.dataset), position=0, leave=True):
                 batch_true_char, batch_true_str = self._evaluate(data)
                 cnt_true_char += batch_true_char
                 cnt_true_str += batch_true_str
@@ -294,7 +294,6 @@ class TFTrainer(BaseTrainer):
 
             for index in range(initial_step, steps_per_epoch):
                 data = self.train_dataloader.next_batch()
-            # for batch_idx_train, data in enumerate(self.train_dataloader.dataset):
                 batch_loss = self._train_step(data)
 
                 # update metrics
