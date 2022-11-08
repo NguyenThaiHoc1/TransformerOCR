@@ -276,7 +276,10 @@ class TFTrainer(BaseTrainer):
             }
 
         if eval_val:
-            pass
+            dict_result['validate'] = {
+                'char_acc': 0,
+                'str_acc': 0
+            }
 
         return dict_result
 
