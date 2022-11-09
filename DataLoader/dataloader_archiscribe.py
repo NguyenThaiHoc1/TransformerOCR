@@ -19,6 +19,7 @@ class Dataset(object):
         }
         self.dataset = None
         self.iterator = None
+        self.batch_size = None
 
     def parse_tfrecord(self, example):
         res = tf.io.parse_single_example(example, self.keys_to_features)
@@ -32,6 +33,8 @@ class Dataset(object):
         self.dataset = self.dataset.shuffle(buffer_size=buffer_size, seed=43)
         self.dataset = self.dataset.map(self.parse_tfrecord, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         self.dataset = self.dataset.batch(batch_size)
+
+        self.batch_size = batch_size
         if repeat:
             self.dataset = self.dataset.repeat()
         self.iterator = iter(self.dataset)
@@ -39,6 +42,13 @@ class Dataset(object):
     def next_batch(self):
         assert self.iterator is not None, "Please loading tfrecord"
         return self.iterator.get_next()
+
+    def __len__(self):
+        assert self.dataset is not None, "Please load record after get leng of data"
+        count = 0
+        for idx, _ in enumerate(self.dataset):
+            count += 1
+        return count * self.batch_size
 
 
 class DataloaderArchiscribeCorPus(Dataloader):

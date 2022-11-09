@@ -250,23 +250,30 @@ class TFTrainer(BaseTrainer):
             output = tf.concat([output[:, :-1], predicted_id, output[:, -1:]], axis=-1)
         return output
 
-    def evalute_specifice_dataset(self, eval_train, eval_val):
+    def evalute_specifice_dataset(self, eval_train, eval_val, train_steps_per_epoch):
         dict_result = {
             'train': None,
             'validate': None,
         }
+        metrics_names = ['acc_char', 'acc_str']
         if eval_train:
             logging.info('evaluate on train set')
             cnt_true_char = 0
             cnt_true_str = 0
             sum_char = 0
             sum_str = 0
-            for batch, data in tqdm(enumerate(self.train_dataloader.dataset), position=0, leave=True):
+            progbar = tf.keras.utils.Progbar(train_steps_per_epoch, stateful_metrics=metrics_names)
+            for index in range(0, train_steps_per_epoch):
+                data = self.train_dataloader.next_batch()
                 batch_true_char, batch_true_str = self._evaluate(data)
                 cnt_true_char += batch_true_char
                 cnt_true_str += batch_true_str
                 sum_char += data[0].shape[0] * self.max_length_sequence
                 sum_str += data[0].shape[0]
+
+                values = [('acc_char', sum_char), ('acc_str', sum_str)]
+                progbar.add(data[0].shape[0], values=values)
+
             train_char_acc = cnt_true_char / sum_char
             train_str_acc = cnt_true_str / sum_str
 
@@ -318,7 +325,9 @@ class TFTrainer(BaseTrainer):
                     self._checkpoint()
 
             # evaluate on train set
-            result_eval = self.evalute_specifice_dataset(eval_train=True, eval_val=False)
+            result_eval = self.evalute_specifice_dataset(eval_train=True,
+                                                         eval_val=False,
+                                                         train_steps_per_epoch=steps_per_epoch)
 
             print('Accuracy on train set:')
             print('character accuracy: {:.6f}'.format(result_eval['train']['char_acc']))
