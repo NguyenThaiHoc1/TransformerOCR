@@ -1,6 +1,5 @@
 import argparse
 import numpy as np
-from matplotlib import pyplot as plt
 from pathlib import Path
 from DataLoader.dataloader_archiscribe import Dataset as dataset_archiscribe
 
@@ -16,11 +15,16 @@ if __name__ == '__main__':
     path_tfrec = Path(args.path_tfrec)
 
     cl_dataset = dataset_archiscribe(record_path=str(path_tfrec))
-    cl_dataset.load_tfrecord(batch_size=16)
+    cl_dataset.load_tfrecord(batch_size=1, repeat=False)
 
-    step = 2
-    for idx in range(step):
-        image, label = cl_dataset.next_batch()
-        print(label)
-        print(label.shape)
-        break
+    count = 0
+    for _ in cl_dataset.dataset:
+        count += 1
+
+    print(f"The amount of dataset: {count}")
+
+    # for idx in range(step):
+    #     image, label = cl_dataset.next_batch()
+    #     print(label)
+    #     print(label.shape)
+    #     break
