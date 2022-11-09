@@ -301,7 +301,7 @@ class TFTrainer(BaseTrainer):
         print("Current step is: {}".format(initial_step))
 
         for epoch in range(initial_epoch, epochs):
-            print(f"\nEpoch {epoch}/{epochs}")
+            print(f"\n*Epoch {epoch}/{epochs}")
             progress_bar = tqdm(total=steps_per_epoch, initial=initial_step,
                                 ascii="->", colour='#1cd41c')
 
@@ -328,17 +328,19 @@ class TFTrainer(BaseTrainer):
                     self._checkpoint()
 
             # evaluate on train set
-            result_eval = self.evalute_specifice_dataset(eval_train=True,
-                                                         eval_val=False,
-                                                         train_steps_per_epoch=steps_per_epoch)
+            if epoch % 5 == 0:
+                print("Evaluate Phase.")
+                result_eval = self.evalute_specifice_dataset(eval_train=True,
+                                                             eval_val=False,
+                                                             train_steps_per_epoch=steps_per_epoch)
 
-            print('Accuracy on train set:')
-            print('character accuracy: {:.6f}'.format(result_eval['train']['char_acc']))
-            print('sequence accuracy : {:.6f}'.format(result_eval['train']['str_acc']))
+                print('Accuracy on train set:')
+                print('character accuracy: {:.6f}'.format(result_eval['train']['char_acc']))
+                print('sequence accuracy : {:.6f}'.format(result_eval['train']['str_acc']))
 
-            # logs tensorboard to epoch
-            self._log_to_tensorboard_epoch(char_acc=result_eval['train']['char_acc'],
-                                           str_acc=result_eval['train']['str_acc'])
+                # # logs tensorboard to epoch
+                # self._log_to_tensorboard_epoch(char_acc=result_eval['train']['char_acc'],
+                #                                str_acc=result_eval['train']['str_acc'])
 
             # update epoch
             self.schedule['epoch'].assign_add(1)
