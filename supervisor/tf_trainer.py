@@ -255,24 +255,27 @@ class TFTrainer(BaseTrainer):
             'train': None,
             'validate': None,
         }
-        metrics_names = ['acc_char', 'acc_str']
         if eval_train:
             logging.info('evaluate on train set')
             cnt_true_char = 0
             cnt_true_str = 0
             sum_char = 0
             sum_str = 0
-            progbar = tf.keras.utils.Progbar(train_steps_per_epoch, stateful_metrics=metrics_names)
-            for index in range(0, train_steps_per_epoch):
-                data = self.train_dataloader.next_batch()
-                batch_true_char, batch_true_str = self._evaluate(data)
-                cnt_true_char += batch_true_char
-                cnt_true_str += batch_true_str
-                sum_char += data[0].shape[0] * self.max_length_sequence
-                sum_str += data[0].shape[0]
+            with tqdm(total=train_steps_per_epoch, initial=0, ascii="->", colour='#1cd41c', position=0,
+                      leave=True) as pbar:
+                for index in range(0, train_steps_per_epoch):
+                    data = self.train_dataloader.next_batch()
+                    batch_true_char, batch_true_str = self._evaluate(data)
+                    cnt_true_char += batch_true_char
+                    cnt_true_str += batch_true_str
+                    sum_char += data[0].shape[0] * self.max_length_sequence
+                    sum_str += data[0].shape[0]
 
-                values = [('acc_char', sum_char), ('acc_str', sum_str)]
-                progbar.add(data[0].shape[0], values=values)
+                    pbar.update(1)
+                    pbar.set_postfix({
+                        "true_char": "{:.4f}".format(batch_true_char),
+                        "true_str": "{:.4f}".format(batch_true_str)
+                    })
 
             train_char_acc = cnt_true_char / sum_char
             train_str_acc = cnt_true_str / sum_str
