@@ -13,3 +13,5 @@ DatasetTFrecord/*
 
 other
 logs
+Note
+99_get_num_images.py
