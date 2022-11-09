@@ -24,14 +24,6 @@ class EmbeddingLayer(tf.keras.layers.Layer):
             end_point = 'mixed_6a'
             base_model = tf.keras.applications.InceptionResNetV2(include_top=False, weights='imagenet')
             base_model_layers = [layer.name for layer in base_model.layers]
-        elif base_model_name == 'EmbeddingLayer':
-            vocab_size = kwargs.pop('vocab_size', None)
-            output_dim = kwargs.pop('d_model', None)
-            assert vocab_size is not None or output_dim is not None, "Using EmbeddingLayer you need to 'vocab_size' - 'd_model'"
-            base_model = tf.keras.Sequential([
-                tf.keras.layers.Input(shape=(150, 600, 3)),
-                tf.keras.layers.Embedding(input_dim=vocab_size, output_dim=output_dim)
-            ])
         else:
             base_model = tf.keras.Sequential([
                 tf.keras.layers.Input(shape=(150, 600, 3)),
@@ -74,9 +66,9 @@ class EmbeddingLayer(tf.keras.layers.Layer):
         training = kwargs.pop('training', False)
         out = self.embedding_models(inputs, training=training)
 
-        batch_size = tf.shape(inputs)[0]
-        feature_size = tf.shape(out)[-1]
-        out = tf.reshape(out, shape=[batch_size, -1, feature_size], name='ReshapeEmbeddingLayer')
+        # batch_size = tf.shape(inputs)[0]
+        # feature_size = tf.shape(out)[-1]
+        # out = tf.reshape(out, shape=[batch_size, -1, feature_size], name='ReshapeEmbeddingLayer')
         return out
 
 
@@ -84,7 +76,10 @@ class ModelEmbedding(tf.keras.Model):
 
     def __init__(self):
         super(ModelEmbedding, self).__init__()
-        self.embeddings = EmbeddingLayer(base_model_name="Custom", name="Hello")
+        self.embeddings = EmbeddingLayer(base_model_name="EmbeddingLayer",
+                                         d_model=512,
+                                         vocab_size=32000,
+                                         name="Hello")
 
     def call(self, inputs, training=None, mask=None):
         out = self.embeddings(inputs, training)
@@ -95,8 +90,8 @@ if __name__ == '__main__':
     model = ModelEmbedding()
     # model.build(input_shape=(20, 150, 600, 3))
     # model.summary()
-    input_tensor = tf.random.uniform((20, 150, 600, 3))
+    input_tensor = tf.random.uniform((10, 150, 600, 3))
     output_tensor = model(input_tensor)
     print(f"{output_tensor.shape}")
 
-    model.save('./exported_model/')
+    # model.save('./exported_model/')

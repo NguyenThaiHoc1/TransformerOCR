@@ -76,18 +76,18 @@ class TotalModel(tf.keras.Model):
 
 if __name__ == '__main__':
     model = TotalModel(name="CheckingModel",
-                       name_embedding_for_image="Custom",
+                       name_embedding_for_image="EmbeddingLayer",
                        input_shape=(150, 600, 3),
                        num_layers=5,
                        d_model=512,
                        head_counts=8,
                        dff=2048,
-                       input_vocab_size=32000,
-                       target_vocab_size=32000)
+                       input_vocab_size=100,
+                       target_vocab_size=100)
     model.summary(input_shape_of_image=(150, 600, 3))
 
-    image_tensor = tf.random.uniform((20, 150, 600, 3))
-    target = tf.random.uniform((20, 130))
+    image_tensor = tf.random.uniform((10, 150, 600, 3))
+    target = tf.random.uniform((10, 130))
     output_tensor, attention_weights = model((image_tensor, target), mask=None, training=False)
     print(f"{output_tensor.shape}")
-    model.save('./exported_model/')
+    # model.save('./exported_model/')
