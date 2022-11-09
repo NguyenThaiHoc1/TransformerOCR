@@ -66,9 +66,9 @@ class EmbeddingLayer(tf.keras.layers.Layer):
         training = kwargs.pop('training', False)
         out = self.embedding_models(inputs, training=training)
 
-        # batch_size = tf.shape(inputs)[0]
-        # feature_size = tf.shape(out)[-1]
-        # out = tf.reshape(out, shape=[batch_size, -1, feature_size], name='ReshapeEmbeddingLayer')
+        batch_size = tf.shape(inputs)[0]
+        feature_size = tf.shape(out)[-1]
+        out = tf.reshape(out, shape=[batch_size, -1, feature_size], name='ReshapeEmbeddingLayer')
         return out
 
 
