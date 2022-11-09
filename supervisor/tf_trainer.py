@@ -329,7 +329,7 @@ class TFTrainer(BaseTrainer):
 
             # evaluate on train set
             if epoch % 5 == 0:
-                print("Evaluate Phase.")
+                print("\nEvaluate Phase.")
                 result_eval = self.evalute_specifice_dataset(eval_train=True,
                                                              eval_val=False,
                                                              train_steps_per_epoch=steps_per_epoch)
