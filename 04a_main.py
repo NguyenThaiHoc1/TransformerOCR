@@ -1,17 +1,22 @@
+import os
+import glob
 import tensorflow as tf
 from supervisor.tf_trainer import TFTrainer
 from model.total_model import TotalModel
 from utils.optimizer_helpers import CustomSchedule
-from utils.tokens_helpers import get_vocab_from_huggingface
-from DataLoader.dataloader_archiscribe import Dataset
+from utils.tokens_helpers import get_vocab_from_file
+from DataLoader.dataloader_fsns import Dataset
 from settings import config as cfg_training
 
 if __name__ == '__main__':
 
     # get vocab information
-    vocab_size = get_vocab_from_huggingface(name_model=cfg_training.MODEL_TOKENIZER)
+    vocab_size = len(get_vocab_from_file(filename=r'E:\FSNS\FNFS-Dataset\FNFS\charset_size=134.txt'))
 
-    train_dataset = Dataset(record_path='./DatasetTFrecord/archiscribe-corpus/all_archiscribe.tfrec')
+    dataset_path_train = r'E:\FSNS\FNFS-Dataset\FNFS\train'
+    list_files_tfrec_train = glob.glob(os.path.join(dataset_path_train, '*'))
+
+    train_dataset = Dataset(record_path=list_files_tfrec_train)
     train_dataset.load_tfrecord(repeat=True, batch_size=cfg_training.BATCH_SIZE)
 
     model = TotalModel(name="AttentionOCR-Model",
@@ -31,7 +36,7 @@ if __name__ == '__main__':
     else:
         learning_rate = cfg_training.LEARCH_RATE
 
-    optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
+    optimizer = tf.keras.optimizers.Adam(learning_rate)  # , beta_1=0.9, beta_2=0.98, epsilon=1e-9)
 
     supervisor = TFTrainer(train_dataloader=train_dataset,
                            validation_dataloader=train_dataset,

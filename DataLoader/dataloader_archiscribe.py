@@ -29,14 +29,13 @@ class Dataset(object):
         return image, label
 
     def load_tfrecord(self, repeat, batch_size, buffer_size=10240):
-        self.dataset = tf.data.TFRecordDataset(self.record_path)
-        self.dataset = self.dataset.shuffle(buffer_size=buffer_size, seed=43)
-        self.dataset = self.dataset.map(self.parse_tfrecord, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        self.dataset = self.dataset.batch(batch_size)
-
-        self.batch_size = batch_size
+        dataset = tf.data.TFRecordDataset(self.record_path)
+        dataset = dataset.shuffle(buffer_size=buffer_size, seed=43)
+        dataset = dataset.map(self.parse_tfrecord, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         if repeat:
-            self.dataset = self.dataset.repeat()
+            dataset = dataset.repeat()
+        self.dataset = dataset.batch(batch_size)
+        self.batch_size = batch_size
         self.iterator = iter(self.dataset)
 
     def next_batch(self):
