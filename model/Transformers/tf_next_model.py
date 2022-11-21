@@ -2,6 +2,20 @@
     Base-on: https://github.com/lsdefine/attention-is-all-you-need-keras/blob/master/transformer.py
     https://www.graviti.com/article/guide-to-ocr-transformer#datas
 
+    *NOTE: Khi viết model bằng tensorflow.keras.layers
+    Để Debugging mô hình
+    ta không nên thực hiện việc kế thứa các class "tf.keras.layers.Layer" or "tf.keras.Model"
+    Hãy viết dạng form dưới đây
+
+    class TestLayer:
+        def __init__(self):
+            pass
+
+        def __call__(self, inputs, trainings=False):
+            pass
+
+    như vậy sẽ dễ debug hơn
+    Khi hoàn thành thì hẵng thêm các kế thừa từ "tf.keras.layers.Layer" ("Không ảnh hương kết quả")
 """
 import tensorflow as tf
 import numpy as np
@@ -18,8 +32,9 @@ def getpositionencodingmask(max_len, d_emb):
     return pos_enc
 
 
-class PosEncodingLayer:
+class PosEncodingLayer(tf.keras.layers.Layer):
     def __init__(self, max_len, d_emb):
+        super(PosEncodingLayer, self).__init__()
         self.pos_emb_matrix = tf.keras.layers.Embedding(max_len, d_emb, trainable=False,
                                                         weights=[getpositionencodingmask(max_len, d_emb)])
 
@@ -28,29 +43,30 @@ class PosEncodingLayer:
         pos = tf.keras.backend.cumsum(tf.keras.backend.ones_like(x, 'int32'), 1)
         return pos * mask
 
-    def __call__(self, seq, pos_input=False):
+    def call(self, seq, pos_input=False):
         x = seq
         if not pos_input:
             x = tf.keras.layers.Lambda(self.get_pos_seq)(x)
         return self.pos_emb_matrix(x)
 
 
-class Embeddings:
+class Embeddings(tf.keras.layers.Layer):
     def __init__(self, vocab_size, d_model):
-        super().__init__()
+        super(Embeddings, self).__init__()
         self.d_model = d_model
         self.embedding = tf.keras.layers.Embedding(vocab_size, d_model, mask_zero=True)  # cai nay do the dung pretrain
 
-    def __call__(self, inputs, mask=None, training=False):
+    def call(self, inputs, mask=None, training=False):
         output = self.embedding(inputs)
         return output * tf.math.sqrt(tf.cast(self.d_model, dtype=tf.float32))
 
 
-class ScaledDotProductAttention:
+class ScaledDotProductAttention(tf.keras.layers.Layer):
     def __init__(self, attn_dropout=0.1):
+        super(ScaledDotProductAttention, self).__init__()
         self.dropout = tf.keras.layers.Dropout(attn_dropout)
 
-    def __call__(self, q, k, v, mask):  # mask_k or mask_qk
+    def call(self, q, k, v, mask, training=False):  # mask_k or mask_qk
         temper = tf.sqrt(tf.cast(tf.shape(k)[-1], dtype='float32'))
         attn = tf.keras.layers.Lambda(lambda x: tf.keras.backend.batch_dot(x[0], x[1], axes=[2, 2]) / x[2])(
             [q, k, temper])  # shape=(batch, q, k)
@@ -58,12 +74,12 @@ class ScaledDotProductAttention:
             mmask = tf.keras.layers.Lambda(lambda x: (-1e+9) * (1. - tf.keras.backend.cast(x, 'float32')))(mask)
             attn = tf.keras.layers.Add()([attn, mmask])
         attn = tf.keras.layers.Activation('softmax')(attn)
-        attn = self.dropout(attn)
+        attn = self.dropout(attn, training)
         output = tf.keras.layers.Lambda(lambda x: tf.keras.backend.batch_dot(x[0], x[1]))([attn, v])
         return output, attn
 
 
-class MultiHeadedAttention:
+class MultiHeadedAttention(tf.keras.layers.Layer):
 
     def __init__(self, num_heads, d_model, dropout_rate=0.1):
         super(MultiHeadedAttention, self).__init__()
@@ -83,7 +99,7 @@ class MultiHeadedAttention:
 
         self.feedfoward = tf.keras.layers.Dense(d_model)
 
-    def __call__(self, query, key, value, mask=None, training=False):
+    def call(self, query, key, value, mask=None, training=False):
         """
 
         :param query: SHAPE - [b, sequence_len, C or d_model]
@@ -129,10 +145,10 @@ class MultiHeadedAttention:
         return outputs, attn
 
 
-class PositionwiseFeedForward:
+class PositionwiseFeedForward(tf.keras.layers.Layer):
 
     def __init__(self, d_model, d_ff, dropout_rate=0.1):
-        super(PositionwiseFeedForward, self).__init__()
+        super().__init__()
         self.backbone_feature = tf.keras.Sequential([
             tf.keras.layers.Conv1D(d_ff, 1, activation='relu'),
             tf.keras.layers.Conv1D(d_model, 1)
@@ -140,15 +156,15 @@ class PositionwiseFeedForward:
         self.layer_norm = tf.keras.layers.LayerNormalization()
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
 
-    def __call__(self, inputs, training=False):
+    def call(self, inputs, training=False):
         output = self.backbone_feature(inputs, training)
-        output = self.dropout(output)
+        output = self.dropout(output, training)
         output = tf.keras.layers.Add()([output, inputs])
         output = self.layer_norm(output)
         return output
 
 
-class BaseAttention:
+class BaseAttention(tf.keras.layers.Layer):
 
     def __init__(self, num_heads, d_model):
         super(BaseAttention, self).__init__()
@@ -158,7 +174,7 @@ class BaseAttention:
 
 class GlobalSelfAttention(BaseAttention):
 
-    def __call__(self, query, value, key, mask=None, training=False):
+    def call(self, query, value, key, mask=None, training=False):
         output, slf_attn = self.mha(query, value, key, mask, training)
         output = self.layer_norm(tf.keras.layers.Add()([query, output]))
         return output, slf_attn
@@ -166,7 +182,7 @@ class GlobalSelfAttention(BaseAttention):
 
 class CausalSelfAttention(BaseAttention):
 
-    def __call__(self, query, value, key, mask=None, training=False):
+    def call(self, query, value, key, mask=None, training=False):
         output, slf_attn = self.mha(query, value, key, mask, training)
         output = self.layer_norm(tf.keras.layers.Add()([query, output]))
         return output, slf_attn
@@ -174,19 +190,20 @@ class CausalSelfAttention(BaseAttention):
 
 class CrossAttention(BaseAttention):
 
-    def __call__(self, query, value, key, mask=None, training=False):
+    def call(self, query, value, key, mask=None, training=False):
         output, slf_attn = self.mha(query, value, key, mask, training)
         output = self.layer_norm(tf.keras.layers.Add()([query, output]))
         return output, slf_attn
 
 
-class EncoderLayer:
+class EncoderLayer(tf.keras.layers.Layer):
 
-    def __init__(self, num_heads, d_model, d_ff):
+    def __init__(self, num_heads, d_model, d_ff, name):
+        super(EncoderLayer, self).__init__(name=name)
         self.attention_layer = GlobalSelfAttention(num_heads=num_heads, d_model=d_model)
         self.positionwise_feedfoward = PositionwiseFeedForward(d_model=d_model, d_ff=d_ff)
 
-    def __call__(self, enc_inputs, mask=None, training=False):
+    def call(self, enc_inputs, mask=None, training=False):
         output, slf_attn = self.attention_layer(
             enc_inputs, enc_inputs, enc_inputs,
             mask,
@@ -196,9 +213,10 @@ class EncoderLayer:
         return output, slf_attn
 
 
-class Encoder:
+class Encoder(tf.keras.layers.Layer):
 
-    def __init__(self, stack_size, num_heads, d_model, d_ff):
+    def __init__(self, stack_size, num_heads, d_model, d_ff, name):
+        super(Encoder, self).__init__(name=name)
         self.stack_size = stack_size
         self.num_heads = num_heads
         self.d_model = d_model
@@ -208,11 +226,12 @@ class Encoder:
             EncoderLayer(
                 num_heads=num_heads,
                 d_model=d_model,
-                d_ff=d_ff
-            ) for _ in range(stack_size)
+                d_ff=d_ff,
+                name=f"EncoderLayer{i}"
+            ) for i in range(stack_size)
         ]
 
-    def __call__(self, enc_inputs, return_att=True, mask=None, training=False):
+    def call(self, enc_inputs, return_att=True, mask=None, training=False):
         output = enc_inputs
         if return_att:
             atts = []
@@ -227,14 +246,15 @@ class Encoder:
         return (output, atts) if return_att else output
 
 
-class DecoderLayer:
+class DecoderLayer(tf.keras.layers.Layer):
 
-    def __init__(self, num_heads, d_model, d_ff):
+    def __init__(self, num_heads, d_model, d_ff, name):
+        super(DecoderLayer, self).__init__(name=name)
         self.attention_layer = CausalSelfAttention(num_heads=num_heads, d_model=d_model)
         self.cross_attention_layer = CrossAttention(num_heads=num_heads, d_model=d_model)
         self.positionwise_feedfoward = PositionwiseFeedForward(d_model=d_model, d_ff=d_ff)
 
-    def __call__(self, decoder_inputs, encoder_inputs, look_ahead_mask=None, decoder_mask=None, training=False):
+    def call(self, decoder_inputs, encoder_inputs, look_ahead_mask=None, decoder_mask=None, training=False):
         output, slf_attn_1 = self.attention_layer(
             decoder_inputs, decoder_inputs, decoder_inputs,
             mask=look_ahead_mask,
@@ -249,9 +269,10 @@ class DecoderLayer:
         return output, slf_attn_1, slf_attn_2
 
 
-class Decoder:
+class Decoder(tf.keras.layers.Layer):
 
-    def __init__(self, stack_size, num_heads, d_model, d_ff, vocab_size, max_seq_leng):
+    def __init__(self, stack_size, num_heads, d_model, d_ff, vocab_size, max_seq_leng, name):
+        super(Decoder, self).__init__(name=name)
         self.stack_size = stack_size
         self.num_heads = num_heads
         self.d_model = d_model
@@ -265,15 +286,16 @@ class Decoder:
             DecoderLayer(
                 num_heads=num_heads,
                 d_model=d_model,
-                d_ff=d_ff
-            ) for _ in range(stack_size)
+                d_ff=d_ff,
+                name=f"DecoderLayer{i}"
+            ) for i in range(stack_size)
         ]
 
-    def __call__(self, target, enc_outputs,
-                 return_att=True,
-                 look_ahead_mask=None,
-                 mask=None,
-                 training=False):
+    def call(self, target, enc_outputs,
+             return_att=True,
+             look_ahead_mask=None,
+             mask=None,
+             training=False):
         target_emb = self.tokens_embedding(target)
         target_emb = tf.keras.layers.Lambda(lambda x: x[0] + x[1],
                                             output_shape=lambda x: x[0])([target_emb, self.pos_emb(target)])
@@ -292,15 +314,16 @@ class Decoder:
         return (output, self_atts, enc_atts) if return_att else output
 
 
-class Transformer:
+class Transformer(tf.keras.Model):
 
-    def __init__(self, enc_stack_size, dec_stack_size, num_heads, d_model, d_ff, vocab_size, max_seq_leng):
-        super(Transformer, self).__init__()
+    def __init__(self, enc_stack_size, dec_stack_size, num_heads, d_model, d_ff, vocab_size, max_seq_leng, name):
+        super(Transformer, self).__init__(name=name)
         self.enc_layers = Encoder(
             stack_size=enc_stack_size,
             num_heads=num_heads,
             d_model=d_model,
-            d_ff=d_ff
+            d_ff=d_ff,
+            name="Encoder"
         )  # BERT - for IMAGE
 
         self.dec_layers = Decoder(
@@ -309,10 +332,11 @@ class Transformer:
             d_model=d_model,
             d_ff=d_ff,
             vocab_size=vocab_size,
-            max_seq_leng=max_seq_leng
+            max_seq_leng=max_seq_leng,
+            name="Decoder"
         )  # GPT.3 - for WORDS
 
-    def __call__(self, images_batch, target, enc_mask=None, look_ahead_mask=None, training=False):
+    def call(self, images_batch, target, enc_mask=None, look_ahead_mask=None, training=False):
         enc_outputs, _ = self.enc_layers(images_batch, mask=enc_mask, training=training)
         dec_outputs, _, _ = self.dec_layers(target, enc_outputs,
                                             look_ahead_mask=look_ahead_mask,
@@ -332,7 +356,8 @@ if __name__ == '__main__':
         stack_size=5,
         num_heads=4,
         d_model=512,
-        d_ff=2048
+        d_ff=2048,
+        name="Encoder"
     )
 
     out, _ = model(
@@ -352,7 +377,8 @@ if __name__ == '__main__':
         d_model=512,
         d_ff=2048,
         vocab_size=100,
-        max_seq_leng=100
+        max_seq_leng=100,
+        name="Decoder"
     )
 
     out, _, _ = model(
@@ -378,6 +404,7 @@ if __name__ == '__main__':
         d_ff=2048,
         vocab_size=32000,
         max_seq_leng=100,
+        name="TransformersModel"
     )
 
     out = model(

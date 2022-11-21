@@ -1,10 +1,12 @@
 import tensorflow as tf
 from supervisor.tf_trainer import TFTrainer
-from model.total_model import TotalModel
+from model.total_model_v2 import TotalModel
 from utils.optimizer_helpers import CustomSchedule
 from utils.tokens_helpers import get_vocab_from_huggingface
 from DataLoader.dataloader_archiscribe import Dataset
 from settings import config as cfg_training
+
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 if __name__ == '__main__':
 
@@ -12,17 +14,18 @@ if __name__ == '__main__':
     vocab_size = get_vocab_from_huggingface(name_model=cfg_training.MODEL_TOKENIZER)
 
     train_dataset = Dataset(record_path='./DatasetTFrecord/archiscribe-corpus/all_archiscribe.tfrec')
-    train_dataset.load_tfrecord(repeat=True, batch_size=cfg_training.BATCH_SIZE)
+    train_dataset.load_tfrecord(repeat=True, batch_size=cfg_training.BATCH_SIZE,
+                                with_padding_type="padding_have_right")
 
-    model = TotalModel(name="AttentionOCR-Model",
-                       name_embedding_for_image=cfg_training.IMAGES_EMBEDDING_TYPE,
-                       input_shape=cfg_training.INPUT_SHAPE,
-                       num_layers=5,
-                       d_model=cfg_training.MODEL_SIZE,
-                       head_counts=8,
-                       dff=2048,
-                       input_vocab_size=vocab_size,
-                       target_vocab_size=vocab_size)
+    model = TotalModel(
+        enc_stack_size=5,
+        dec_stack_size=5,
+        num_heads=4,
+        d_model=512,
+        d_ff=2048,
+        vocab_size=32000,
+        max_seq_leng=70
+    )
 
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 

@@ -3,12 +3,13 @@ from model.EmbeddingLayers.CustomEmbeddings import EmbeddingLayer
 from model.Transformers.tf_next_model import Transformer
 
 
-class TotalModel:
+class TotalModel(tf.keras.Model):
 
     def __init__(self, enc_stack_size, dec_stack_size,
                  num_heads, d_model, d_ff,
                  vocab_size,
                  max_seq_leng):
+        super(TotalModel, self).__init__()
         # init param
         self.enc_stack_size = enc_stack_size
         self.dec_stack_size = dec_stack_size
@@ -30,14 +31,18 @@ class TotalModel:
             d_model=self.d_model,
             d_ff=self.d_ff,
             vocab_size=self.vocab_size,
-            max_seq_leng=self.max_seq_leng
+            max_seq_leng=self.max_seq_leng,
+            name="Transformer_Model"
         )
 
-    def __call__(self, images, targets, enc_masks, look_ahead_masks, training=False):
+        self.final_layer = tf.keras.layers.Dense(self.vocab_size, use_bias=False)
+
+    def call(self, images, targets, enc_masks, look_ahead_masks, training=False):
         images_embs = self.embeddings(images)
         output = self.transformer(images_embs, targets,
                                   enc_mask=enc_masks, look_ahead_mask=look_ahead_masks,
                                   training=training)
+        output = self.final_layer(output)
         return output
 
 
@@ -75,4 +80,5 @@ if __name__ == '__main__':
     )
 
     print(f"TOTAL-MODEL: {out.shape}")
+    # model.save('../exported_model/')
     # END
