@@ -77,7 +77,7 @@ class Dataset(object):
                         lambda: self.max_ratio,
                         lambda: ratio)
 
-        h_new = 150
+        h_new = 32
         w_new = h_new * ratio
         image_resize = tf.image.resize(image, (h_new, w_new))
         background_padding = tf.zeros([h_new, h_new * self.max_ratio, 3], dtype=tf.float32)
@@ -138,10 +138,10 @@ class Dataset(object):
     def load_tfrecord(self, repeat, batch_size, buffer_size=10240, max_ratio=8,
                       with_padding_type="padding_without_right"):
 
-        self.max_ratio = max_ratio
+        self.max_ratio = max_ratio * 3
 
         dataset = tf.data.TFRecordDataset(self.record_path)
-        dataset = dataset.shuffle(buffer_size=buffer_size, seed=43)
+        # dataset = dataset.shuffle(buffer_size=buffer_size, seed=43)
         dataset = dataset.map(self.parse_tfrecord, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         if with_padding_type == "padding_have_right":
@@ -164,6 +164,10 @@ class Dataset(object):
         assert self.dataset is not None, "Please load record after get leng of data"
         count = 0
         for idx, (image, label, encode_mask, decode_mask) in enumerate(self.dataset):
+            print(image.shape)
+            print(label.shape)
+            print(encode_mask.shape)
+            print(decode_mask.shape)
             count += 1
             break
         return count * self.batch_size
