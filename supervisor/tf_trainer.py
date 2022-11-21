@@ -75,19 +75,18 @@ class TFTrainer(BaseTrainer):
         dt_string = datetime.now().strftime("%d%m%Y_%H_%M_%S")
         self.clerk = tf.summary.create_file_writer(os.path.join(training_dir, 'logs', dt_string))
 
-        # create mask look head
-        self.look_ahead_mask = create_look_ahead_mask(self.max_length_sequence)
-
     def _train_step(self, data):
-        data_image, targets = data
+        batch_images, batch_targets, encoder_masks, look_ahead_masks = data
+        encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
+        look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
         with tf.GradientTape() as tape:
-            predictions, attention_weights = self.model((data_image, targets),
-                                                        enc_padding_mask=None,
-                                                        look_ahead_mask=self.look_ahead_mask,
-                                                        dec_padding_mask=None,
-                                                        training=True)
-            loss = self.loss_fn(targets, predictions)
-        variables = self.model.embedding_layers.trainable_variables + self.model.transformers.trainable_variables
+            predictions = self.model(images=batch_images,
+                                     targets=batch_targets,
+                                     enc_masks=encoder_masks,
+                                     look_ahead_masks=look_ahead_masks,
+                                     training=True)
+            loss = self.loss_fn(batch_targets, predictions)
+        variables = self.model.embeddings.trainable_variables + self.model.transformer.trainable_variables
         gradients = tape.gradient(loss, variables)
         self.optimizer.apply_gradients(zip(gradients, variables))
         return loss
