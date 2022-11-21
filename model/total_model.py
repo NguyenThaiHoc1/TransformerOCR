@@ -76,18 +76,31 @@ class TotalModel(tf.keras.Model):
 
 if __name__ == '__main__':
     model = TotalModel(name="CheckingModel",
-                       name_embedding_for_image="EmbeddingLayer",
-                       input_shape=(150, 600, 3),
+                       name_embedding_for_image="ResNet-18",
+                       input_shape=(32, 768, 3),
                        num_layers=5,
                        d_model=512,
                        head_counts=8,
                        dff=2048,
                        input_vocab_size=100,
                        target_vocab_size=100)
-    model.summary(input_shape_of_image=(150, 600, 3))
 
-    image_tensor = tf.random.uniform((10, 150, 600, 3))
-    target = tf.random.uniform((10, 130))
-    output_tensor, attention_weights = model((image_tensor, target), mask=None, training=False)
+    # model.summary(input_shape_of_image=(150, 600, 3))
+
+    image_tensor = tf.random.uniform((2, 32, 768, 3))
+    # encoder_padding_mask = tf.random.uniform((8, 1, 24))
+    encoder_padding_mask = tf.cast(tf.random.uniform((2, 1, 24)) < 0.5, dtype=tf.float32)
+
+    target = tf.random.uniform((2, 32))
+    decoder_padding_mask = tf.random.uniform((2, 1, 32))
+    look_ahead_mask = tf.random.uniform((2, 32, 32))
+
+    output_tensor, attention_weights = model(
+        (image_tensor, target),
+        enc_padding_mask=encoder_padding_mask,
+        look_ahead_mask=None,
+        dec_padding_mask=None,
+        training=True
+    )
     print(f"{output_tensor.shape}")
     # model.save('./exported_model/')
