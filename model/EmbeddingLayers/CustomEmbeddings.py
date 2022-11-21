@@ -20,10 +20,17 @@ class EmbeddingLayer(tf.keras.layers.Layer):
             base_model = tf.keras.applications.InceptionV3(include_top=False, weights='imagenet')
             base_model_layers = [layer.name for layer in base_model.layers]
 
+        elif base_model_name == 'ResNet-18':
+            from classification_models.keras import Classifiers
+            ResNet18, preprocess_input = Classifiers.get('resnet18')
+            base_model = ResNet18((32, 768, 3), weights='imagenet', include_top=False)
+            base_model_layers = [layer.name for layer in base_model.layers]
+
         elif base_model_name == 'InceptionResNetV2':
             end_point = 'mixed_6a'
             base_model = tf.keras.applications.InceptionResNetV2(include_top=False, weights='imagenet')
             base_model_layers = [layer.name for layer in base_model.layers]
+
         else:
             base_model = tf.keras.Sequential([
                 tf.keras.layers.Input(shape=(150, 600, 3)),
@@ -76,7 +83,7 @@ class ModelEmbedding(tf.keras.Model):
 
     def __init__(self):
         super(ModelEmbedding, self).__init__()
-        self.embeddings = EmbeddingLayer(base_model_name="EmbeddingLayer",
+        self.embeddings = EmbeddingLayer(base_model_name="ResNet-18",
                                          d_model=512,
                                          vocab_size=32000,
                                          name="Hello")
@@ -90,7 +97,7 @@ if __name__ == '__main__':
     model = ModelEmbedding()
     # model.build(input_shape=(20, 150, 600, 3))
     # model.summary()
-    input_tensor = tf.random.uniform((10, 150, 600, 3))
+    input_tensor = tf.random.uniform((10, 32, 768, 3))
     output_tensor = model(input_tensor)
     print(f"{output_tensor.shape}")
 
