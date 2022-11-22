@@ -211,6 +211,7 @@ class TFTrainer(BaseTrainer):
         batch_images, batch_targets, encoder_masks, look_ahead_masks = data
         encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
         look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
+        output = np.zeros((batch_images.shape[0], 1))
         for i in range(self.max_length_sequence):  # vocab target
             predictions, attention_weights = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks],
                                                         training=True)
