@@ -211,20 +211,11 @@ class TFTrainer(BaseTrainer):
         batch_images, batch_targets, encoder_masks, look_ahead_masks = data
         encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
         look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
-        output = np.zeros((batch_images.shape[0], 1))
         for i in range(self.max_length_sequence):  # vocab target
-            predictions, attention_weights = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks],
-                                                        training=True)
-
-            # select the last word from the seq_len dimension
-            predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
-
-            predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32)
-
-            output = tf.concat([output[:, :-1], predicted_id, output[:, -1:]], axis=-1)
-        batch_true_char = np.sum(np.equal(output[:, :-1], batch_targets))
-        batch_true_str = np.sum(np.prod(np.equal(output[:, :-1], batch_targets), axis=1))
-        return batch_true_char, batch_true_str
+            predictions = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks], training=False)
+            loss = self.loss_fn(predictions, batch_targets)
+            acc = get_accu(predictions, batch_targets)
+        return loss, acc
 
     def inference(self, image):
         output = np.zeros((1, 1))
@@ -255,38 +246,35 @@ class TFTrainer(BaseTrainer):
         }
         if eval_train:
             logging.info('evaluate on train set')
+            batch_total_loss = 0
             cnt_true_char = 0
-            cnt_true_str = 0
-            sum_char = 0
-            sum_str = 0
+            sum_batch = 0
             with tqdm(total=train_steps_per_epoch, initial=0, ascii="->", colour='#1cd41c', position=0,
                       leave=True) as pbar:
                 for index in range(0, train_steps_per_epoch):
                     data = self.train_dataloader.next_batch()
-                    batch_true_char, batch_true_str = self._evaluate(data)
-                    cnt_true_char += batch_true_char
-                    cnt_true_str += batch_true_str
-                    sum_char += data[0].shape[0] * self.max_length_sequence
-                    sum_str += data[0].shape[0]
+                    batch_loss, batch_acc = self._evaluate(data)
+                    batch_total_loss += batch_loss
+                    cnt_true_char += batch_acc
+                    sum_batch += data[0].shape[0]
 
                     pbar.update(1)
                     pbar.set_postfix({
-                        "true_char": "{:.4f}".format(batch_true_char),
-                        "true_str": "{:.4f}".format(batch_true_str)
+                        "accuracy": "{:.4f}".format(batch_acc)
                     })
 
-            train_char_acc = cnt_true_char / sum_char
-            train_str_acc = cnt_true_str / sum_str
+            train_total_loss = batch_total_loss / sum_batch
+            train_char_acc = cnt_true_char / sum_batch
 
             dict_result['train'] = {
-                'char_acc': train_char_acc,
-                'str_acc': train_str_acc
+                'total_loss': train_total_loss,
+                'accuracy': train_char_acc
             }
 
         if eval_val:
             dict_result['validate'] = {
-                'char_acc': 0,
-                'str_acc': 0
+                'total_loss': 0,
+                'accuracy': 0
             }
 
         return dict_result
@@ -333,9 +321,9 @@ class TFTrainer(BaseTrainer):
                                                              eval_val=False,
                                                              train_steps_per_epoch=steps_per_epoch)
 
-                print('Accuracy on train set:')
-                print('character accuracy: {:.6f}'.format(result_eval['train']['char_acc']))
-                print('sequence accuracy : {:.6f}'.format(result_eval['train']['str_acc']))
+                print('Information on Train_set:')
+                print('Total loss:        {:.6f}'.format(result_eval['train']['total_loss']))
+                print('Category accuracy: {:.6f}'.format(result_eval['train']['accuracy']))
 
                 # # logs tensorboard to epoch
                 # self._log_to_tensorboard_epoch(char_acc=result_eval['train']['char_acc'],
