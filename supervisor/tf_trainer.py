@@ -8,6 +8,15 @@ from supervisor.trainer import BaseTrainer
 from utils.tensorflow_helpers import create_look_ahead_mask, create_padding_mask
 
 
+def get_accu(y_pred, y_true):
+    mask = tf.cast(tf.not_equal(y_true, 0), 'float32')
+    corr = tf.keras.backend.cast(tf.keras.backend.equal(tf.keras.backend.cast(y_true, 'int32'),
+                                                        tf.keras.backend.cast(tf.keras.backend.argmax(y_pred, axis=-1),
+                                                                              'int32')), 'float32')
+    corr = tf.keras.backend.sum(corr * mask, -1) / tf.keras.backend.sum(mask, -1)
+    return tf.keras.backend.mean(corr)
+
+
 class TFTrainer(BaseTrainer):
 
     def __init__(self, train_dataloader,
@@ -80,16 +89,13 @@ class TFTrainer(BaseTrainer):
         encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
         look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
         with tf.GradientTape() as tape:
-            predictions = self.model(images=batch_images,
-                                     targets=batch_targets,
-                                     enc_masks=encoder_masks,
-                                     look_ahead_masks=look_ahead_masks,
-                                     training=True)
-            loss = self.loss_fn(batch_targets, predictions)
-        variables = self.model.embeddings.trainable_variables + self.model.transformer.trainable_variables
+            predictions = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks], training=True)
+            loss = self.loss_fn(predictions, batch_targets)
+            acc = get_accu(predictions, batch_targets)
+        variables = self.model.trainable_variables
         gradients = tape.gradient(loss, variables)
         self.optimizer.apply_gradients(zip(gradients, variables))
-        return loss
+        return loss, acc
 
     def _reset_metrics(self):
         for key, metric in self.metrics.items():
@@ -202,20 +208,12 @@ class TFTrainer(BaseTrainer):
         print("Model saved at: {}".format(export_dir))
 
     def _evaluate(self, data):
-        batch_images, batch_targets = data
-        # encoder_input = self.model.embedding_layers(batch_images, training=False)
-        output = np.zeros((batch_images.shape[0], 1))
+        batch_images, batch_targets, encoder_masks, look_ahead_masks = data
+        encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
+        look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
         for i in range(self.max_length_sequence):  # vocab target
-            enc_padding_mask = None
-            combined_mask = create_look_ahead_mask(i + 1)
-            dec_padding_mask = None
-
-            # predictions.shape == (batch_size, seq_len, vocab_size)
-            predictions, attention_weights = self.model((batch_images, output),
-                                                        enc_padding_mask=enc_padding_mask,
-                                                        look_ahead_mask=combined_mask,
-                                                        dec_padding_mask=dec_padding_mask,
-                                                        training=False)
+            predictions, attention_weights = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks],
+                                                        training=True)
 
             # select the last word from the seq_len dimension
             predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
@@ -306,7 +304,7 @@ class TFTrainer(BaseTrainer):
 
             for index in range(initial_step, steps_per_epoch):
                 data = self.train_dataloader.next_batch()
-                batch_loss = self._train_step(data)
+                batch_loss, batch_acc = self._train_step(data)
 
                 # update metrics
                 self._update_metrics(loss=batch_loss)
@@ -315,7 +313,8 @@ class TFTrainer(BaseTrainer):
                 # update process
                 progress_bar.update(1)
                 progress_bar.set_postfix({
-                    "loss": "{:.4f}".format(batch_loss.numpy())
+                    "loss": "{:.4f}".format(batch_loss.numpy()),
+                    "accuracy": "{:.4f}".format(batch_acc.numpy())
                 })
 
                 # update schedule
