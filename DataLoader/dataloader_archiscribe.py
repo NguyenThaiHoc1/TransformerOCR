@@ -56,7 +56,7 @@ class Dataset(object):
 
         def _py_function_mask(label):
             grouth_truth = label.numpy()
-            decode_in = grouth_truth[:-1]
+            decode_in = grouth_truth # [:-1]
             decode_out = grouth_truth[1:]
             tgt_mask = self.make_std_mask(torch.tensor(decode_in), 0)
             return tf.convert_to_tensor(decode_in, dtype=tf.uint8), \
