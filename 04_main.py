@@ -1,6 +1,25 @@
+"""
+    Các công việc
+    - Tìm hiểu cách dataloader hoạt động.
+        + Input: images or text, cross_attention                          | x
+        + Position Embeddings                                             | x
+        + Masking and Paddings                                            | x
+
+    - Tìm hiểu cách hoạt động của mô hình.                                | x
+        + Encoder (Image Embeddings for Encoder)                          | x
+        + Decoder                                                         | x
+        + Improve Decoder                                                 | o
+            - Greendy-Beam Search: https://machinelearningmastery.com/beam-search-decoder-natural-language-processing/
+
+    - Tìm hiểu cách tính độ chính xác và loss function                    | x
+        + Đơn giản là category accuracy                                   | x
+
+
+
+"""
 import tensorflow as tf
 from supervisor.tf_trainer import TFTrainer
-from model.total_model_v3 import TotalModel
+from model.total_model import TotalModel
 from utils.optimizer_helpers import CustomSchedule
 from utils.tokens_helpers import get_vocab_from_huggingface
 from DataLoader.dataloader_archiscribe import Dataset
