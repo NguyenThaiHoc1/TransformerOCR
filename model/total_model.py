@@ -36,6 +36,7 @@ class TotalModel:
 
         self.final_layer = tf.keras.layers.Dense(self.vocab_size, use_bias=False)
 
+        # init model
         self.model = None
 
     def compile(self):

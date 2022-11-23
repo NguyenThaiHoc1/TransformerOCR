@@ -1,20 +1,10 @@
 import os
 import logging
 from tqdm import tqdm
-import numpy as np
 from datetime import datetime
 import tensorflow as tf
 from supervisor.trainer import BaseTrainer
-from utils.tensorflow_helpers import create_look_ahead_mask, create_padding_mask
-
-
-def get_accu(y_pred, y_true):
-    mask = tf.cast(tf.not_equal(y_true, 0), 'float32')
-    corr = tf.keras.backend.cast(tf.keras.backend.equal(tf.keras.backend.cast(y_true, 'int32'),
-                                                        tf.keras.backend.cast(tf.keras.backend.argmax(y_pred, axis=-1),
-                                                                              'int32')), 'float32')
-    corr = tf.keras.backend.sum(corr * mask, -1) / tf.keras.backend.sum(mask, -1)
-    return tf.keras.backend.mean(corr)
+from utils.metrics_helpers import accuracy_on_max_tokens
 
 
 class TFTrainer(BaseTrainer):
@@ -32,10 +22,7 @@ class TFTrainer(BaseTrainer):
 
         self.metrics = {
             'loss': tf.keras.metrics.Mean(name="train_loss_mean", dtype=tf.float32),
-        }
-
-        self.epoch_metrics = {
-            'loss': tf.keras.metrics.Mean(name="train_epoch_loss_mean", dtype=tf.float32),
+            'accuracy': tf.keras.metrics.Mean(name="train_accuracy_mean", dtype=tf.float32)
         }
 
         self.monitor = self.metrics[self.monitor]
@@ -84,6 +71,18 @@ class TFTrainer(BaseTrainer):
         dt_string = datetime.now().strftime("%d%m%Y_%H_%M_%S")
         self.clerk = tf.summary.create_file_writer(os.path.join(training_dir, 'logs', dt_string))
 
+    @tf.function
+    def _evaluate(self, data):
+        batch_images, batch_targets, encoder_masks, look_ahead_masks = data
+        encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
+        look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
+        for i in range(self.max_length_sequence):  # vocab target
+            predictions = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks], training=False)
+            loss = self.loss_fn(predictions, batch_targets)
+            acc = accuracy_on_max_tokens(predictions, batch_targets)
+        return loss, acc
+
+    @tf.function
     def _train_step(self, data):
         batch_images, batch_targets, encoder_masks, look_ahead_masks = data
         encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
@@ -91,7 +90,7 @@ class TFTrainer(BaseTrainer):
         with tf.GradientTape() as tape:
             predictions = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks], training=True)
             loss = self.loss_fn(predictions, batch_targets)
-            acc = get_accu(predictions, batch_targets)
+            acc = accuracy_on_max_tokens(predictions, batch_targets)  # ta có thể sử dụng tf.metrics.CategoryAccuracy
         variables = self.model.trainable_variables
         gradients = tape.gradient(loss, variables)
         self.optimizer.apply_gradients(zip(gradients, variables))
@@ -101,22 +100,12 @@ class TFTrainer(BaseTrainer):
         for key, metric in self.metrics.items():
             metric.reset_states()
 
-    def _reset_epoch_metrics(self):
-        for key, metric in self.epoch_metrics.items():
-            metric.reset_states()
-
     def _update_metrics(self, **kwargs):
-        """
-        :param kwargs: some parameter we can change for future
-        :return: None (Update state of metrics)
-        """
         # get parameter
         loss = kwargs['loss']
+        accuracy = kwargs['accuracy']
         self.metrics['loss'].update_state(loss)
-
-    def _update_metrics_epoch(self, **kwargs):
-        loss = kwargs['loss']
-        self.epoch_metrics['loss'].update_state(loss)
+        self.metrics['accuracy'].update_state(accuracy)
 
     def _checkpoint(self):
 
@@ -151,25 +140,16 @@ class TFTrainer(BaseTrainer):
         self._reset_metrics()
         print(f"\nCheckpoint saved at global step {self.schedule['step']}, to file: {ckpt_path}")
 
-    def _log_to_tensorboard_epoch(self, **kwargs):
-        char_acc = kwargs['char_acc']
-        str_acc = kwargs['str_acc']
-        epoch = int(self.schedule['epoch'])
-        epoch_train_loss = self.epoch_metrics['loss'].result()
-
-        with self.clerk.as_default():
-            tf.summary.scalar("epoch_loss/train", epoch_train_loss, step=epoch)
-            tf.summary.scalar("char_acc/train", char_acc, step=epoch)
-            tf.summary.scalar("str_acc/train", str_acc, step=epoch)
-
     def _log_to_tensorboard(self):
         current_step = int(self.schedule['step'])
         train_loss = self.metrics['loss'].result()
+        train_accuracy = self.metrics['accuracy'].result()
         lr = self.optimizer._decayed_lr('float32')
 
         with self.clerk.as_default():
             tf.summary.scalar("loss", train_loss, step=current_step)
-            tf.summary.scalar("learning rate", lr, step=current_step)
+            tf.summary.scalar("learning_rate", lr, step=current_step)
+            tf.summary.scalar("accuracy", train_accuracy, step=current_step)
 
     def restore(self, weights_only, from_scout):
         """
@@ -206,38 +186,6 @@ class TFTrainer(BaseTrainer):
         print("Saving model to {} ...".format(export_dir))
         self.model.save(export_dir)
         print("Model saved at: {}".format(export_dir))
-
-    def _evaluate(self, data):
-        batch_images, batch_targets, encoder_masks, look_ahead_masks = data
-        encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
-        look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
-        for i in range(self.max_length_sequence):  # vocab target
-            predictions = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks], training=False)
-            loss = self.loss_fn(predictions, batch_targets)
-            acc = get_accu(predictions, batch_targets)
-        return loss, acc
-
-    def inference(self, image):
-        output = np.zeros((1, 1))
-        for i in range(self.max_length_sequence):
-            enc_padding_mask = None
-            combined_mask = create_look_ahead_mask(i + 1)
-            dec_padding_mask = None
-
-            # predictions.shape == (batch_size, seq_len, vocab_size)
-            predictions, attention_weights = self.model((np.array([image]), output),
-                                                        enc_padding_mask=enc_padding_mask,
-                                                        look_ahead_mask=combined_mask,
-                                                        dec_padding_mask=dec_padding_mask,
-                                                        training=False)
-
-            # select the last word from the seq_len dimension
-            predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
-
-            predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32)
-
-            output = tf.concat([output[:, :-1], predicted_id, output[:, -1:]], axis=-1)
-        return output
 
     def evalute_specifice_dataset(self, eval_train, eval_val, train_steps_per_epoch):
         dict_result = {
@@ -279,7 +227,8 @@ class TFTrainer(BaseTrainer):
 
         return dict_result
 
-    def train(self, epochs, steps_per_epoch):
+    def train(self, epochs, steps_per_epoch, flag_evaluate_train=True, flag_evaluate_validate=False):
+        assert self.model is None, "Please compile Architecture when you start train."
         initial_epoch = self.schedule['epoch'].numpy()  # loading from schedule
         global_step = self.schedule['step'].numpy()
         initial_step = global_step % initial_epoch
@@ -296,8 +245,7 @@ class TFTrainer(BaseTrainer):
                 batch_loss, batch_acc = self._train_step(data)
 
                 # update metrics
-                self._update_metrics(loss=batch_loss)
-                self._update_metrics_epoch(loss=batch_loss)
+                self._update_metrics(loss=batch_loss, accuracy=batch_acc)
 
                 # update process
                 progress_bar.update(1)
@@ -321,13 +269,13 @@ class TFTrainer(BaseTrainer):
                                                              eval_val=False,
                                                              train_steps_per_epoch=steps_per_epoch)
 
-                print('Information on Train_set:')
-                print('Total loss:        {:.6f}'.format(result_eval['train']['total_loss']))
-                print('Category accuracy: {:.6f}'.format(result_eval['train']['accuracy']))
+                if flag_evaluate_train:
+                    print('Information on Train_set:')
+                    print('Total loss:        {:.6f}'.format(result_eval['train']['total_loss']))
+                    print('Category accuracy: {:.6f}'.format(result_eval['train']['accuracy']))
 
-                # # logs tensorboard to epoch
-                # self._log_to_tensorboard_epoch(char_acc=result_eval['train']['char_acc'],
-                #                                str_acc=result_eval['train']['str_acc'])
+                if flag_evaluate_validate:
+                    pass
 
             # update epoch
             self.schedule['epoch'].assign_add(1)
@@ -335,4 +283,3 @@ class TFTrainer(BaseTrainer):
             # close process bar
             progress_bar.close()
             initial_step = 0
-            self._reset_epoch_metrics()

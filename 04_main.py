@@ -24,19 +24,7 @@ from utils.optimizer_helpers import CustomSchedule
 from utils.tokens_helpers import get_vocab_from_huggingface
 from DataLoader.dataloader_archiscribe import Dataset
 from settings import config as cfg_training
-
-
-# tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-
-
-def get_loss(y_pred, y_true):
-    y_true = tf.cast(y_true, 'int32')
-    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred)
-    mask = tf.cast(tf.not_equal(y_true, 0), 'float32')
-    loss = tf.reduce_sum(loss * mask, -1) / tf.reduce_sum(mask, -1)
-    loss = tf.keras.backend.mean(loss)
-    return loss
-
+from utils.metrics_helpers import softmax_ce_loss
 
 if __name__ == '__main__':
 
@@ -47,19 +35,17 @@ if __name__ == '__main__':
     train_dataset.load_tfrecord(repeat=True, batch_size=cfg_training.BATCH_SIZE,
                                 with_padding_type="padding_have_right")
 
-    total_model = TotalModel(
-        enc_stack_size=5,
-        dec_stack_size=5,
-        num_heads=4,
-        d_model=512,
-        d_ff=2048,
+    architecture_model = TotalModel(
+        enc_stack_size=cfg_training.ENC_STACK_SIZE,
+        dec_stack_size=cfg_training.DEC_STACK_SIZE,
+        num_heads=cfg_training.NUM_HEADS,
+        d_model=cfg_training.D_MODEL,
+        d_ff=cfg_training.D_FF,
         vocab_size=32000,
-        max_seq_leng=70
+        max_seq_leng=cfg_training.MAX_LENGTH_SEQUENCE
     )
 
-    total_model.compile()
-
-    loss_fn = get_loss
+    architecture_model.compile()
 
     if cfg_training.LEARNING_RATE_TYPE == 'schedule':
         learning_rate = CustomSchedule(cfg_training.MODEL_SIZE)
@@ -70,8 +56,8 @@ if __name__ == '__main__':
 
     supervisor = TFTrainer(train_dataloader=train_dataset,
                            validation_dataloader=train_dataset,
-                           model=total_model.model,
-                           loss_fn=loss_fn,
+                           model=architecture_model.model,
+                           loss_fn=softmax_ce_loss,
                            optimizer=optimizer,
                            save_freq=cfg_training.SAVE_FREQ,
                            max_length_sequence=cfg_training.MAX_LENGTH_SEQUENCE,

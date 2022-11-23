@@ -4,10 +4,20 @@ PROJECTS_PATH = Path().parent.resolve()
 
 EXPORT_DIR = PROJECTS_PATH / "exported_model"
 
-# SHAPE IMAHGE STATIC
-INPUT_SHAPE = (32, 768, 3)
+#################################################
+# HYPER-PARAMETER OF ARCHITECTURE ###############
+#################################################
+ENC_STACK_SIZE = 5
+DEC_STACK_SIZE = 5
+NUM_HEADS = 8
+D_MODEL = 512  # D_MODEL % NUM_HEADS == 0
+D_FF = 2048
+# MODALITIES - IMAGES
+IMAGES_EMBEDDING_TYPE = 'ResNet-18'
 
-# BERT TOKENIZER
+#################################################
+# BERT TOKENIZER ################################
+#################################################
 MODEL_TOKENIZER = 'bert-base-german-cased'
 MAX_LENGTH_SEQUENCE = 32
 
@@ -15,20 +25,11 @@ MAX_LENGTH_SEQUENCE = 32
 LEARNING_RATE_TYPE = 'other'  # other
 LEARCH_RATE = 1e-4
 
-# EMBEDDING SIZE
-MODEL_SIZE = 512
-
-# MODALITIES - IMAGES
-IMAGES_EMBEDDING_TYPE = 'ResNet-18'
-
-# HYPER PARAMETER FOR TRAINING
-# DATA-TRAINING
+#################################################
+# HYPER PARAMETER FOR TRAINING ##################
+#################################################
 EPOCHS = 10
 NUM_SAMPLES = 55504
 BATCH_SIZE = 2
 
-# DATA-VALIDATE
-
-
-# FREQUENCE SAVING CHECKPPOINT
-SAVE_FREQ = 1000
+SAVE_FREQ = 1000  # FREQUENCE SAVING CHECKPPOINT
