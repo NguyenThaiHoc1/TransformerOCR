@@ -19,12 +19,15 @@
 """
 import tensorflow as tf
 from supervisor.tf_trainer import TFTrainer
-from model.total_model import TotalModel
+from model.total_model_subclassing import TotalModel
 from utils.optimizer_helpers import CustomSchedule
 from utils.tokens_helpers import get_vocab_from_huggingface
 from DataLoader.dataloader_archiscribe import Dataset
 from settings import config as cfg_training
 from utils.metrics_helpers import softmax_ce_loss
+
+import logging
+tf.get_logger().setLevel(logging.ERROR)
 
 if __name__ == '__main__':
 
@@ -45,10 +48,10 @@ if __name__ == '__main__':
         max_seq_leng=cfg_training.MAX_LENGTH_SEQUENCE
     )
 
-    architecture_model.compile()
+    architecture_model.build_graph()
 
     if cfg_training.LEARNING_RATE_TYPE == 'schedule':
-        learning_rate = CustomSchedule(cfg_training.MODEL_SIZE)
+        learning_rate = CustomSchedule(cfg_training.D_MODEL)
     else:
         learning_rate = cfg_training.LEARCH_RATE
 
@@ -56,7 +59,7 @@ if __name__ == '__main__':
 
     supervisor = TFTrainer(train_dataloader=train_dataset,
                            validation_dataloader=train_dataset,
-                           model=architecture_model.model,
+                           model=architecture_model,
                            loss_fn=softmax_ce_loss,
                            optimizer=optimizer,
                            save_freq=cfg_training.SAVE_FREQ,
