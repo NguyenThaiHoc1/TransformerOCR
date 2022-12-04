@@ -7,6 +7,23 @@ from supervisor.trainer import BaseTrainer
 from utils.metrics_helpers import accuracy_on_max_tokens
 
 
+def create_padding_mask(seq):
+    seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
+    return seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, 1, seq_len)
+
+
+def create_look_ahead_mask(size):
+    mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
+    return mask  # (seq_len, seq_len)
+
+
+def create_masks_decoder(tar):
+    look_ahead_mask = create_look_ahead_mask(tf.shape(tar)[1])
+    dec_target_padding_mask = create_padding_mask(tar)
+    combined_mask = tf.maximum(dec_target_padding_mask, look_ahead_mask)
+    return combined_mask
+
+
 class TFTrainer(BaseTrainer):
 
     def __init__(self, train_dataloader,
@@ -77,10 +94,46 @@ class TFTrainer(BaseTrainer):
         encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
         look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
         for i in range(self.max_length_sequence):  # vocab target
-            predictions = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks], training=False)
+            predictions = self.model(batch_images, batch_targets, encoder_masks, look_ahead_masks, training=False)
             loss = self.loss_fn(predictions, batch_targets)
             acc = accuracy_on_max_tokens(predictions, batch_targets)
         return loss, acc
+
+    def _evalute_test(self, data):
+        batch_images, batch_targets, encoder_masks, look_ahead_masks = data
+        start_token = 1
+        end_token = 2
+
+        # decoder input is start token.
+        decoder_input = [start_token]
+        output = tf.expand_dims(decoder_input, 0)  # tokens
+        result = []  # word list
+
+        for i in range(100):
+            dec_mask = create_masks_decoder(output)
+
+            # predictions.shape == (batch_size, seq_len, vocab_size)
+            predictions, attention_weights = self.model(batch_images[-1:, :, :],
+                                                        output,
+                                                        encoder_masks[-1:, :],
+                                                        dec_mask,
+                                                        training=False)
+
+            # select the last word from the seq_len dimension
+            predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
+
+            predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32)
+
+            # return the result if the predicted_id is equal to the end token
+            if predicted_id == end_token:
+                return result, tf.squeeze(output, axis=0), attention_weights
+            # concatentate the predicted_id to the output which is given to the decoder
+            # as its input.
+            result.append(int(predicted_id))
+            output = tf.concat([output, predicted_id], axis=-1)
+
+        return result, tf.squeeze(output, axis=0), attention_weights
+
 
     @tf.function
     def _train_step(self, data):
@@ -88,7 +141,7 @@ class TFTrainer(BaseTrainer):
         encoder_masks = tf.cast(encoder_masks, dtype=tf.float32)
         look_ahead_masks = tf.cast(look_ahead_masks, dtype=tf.float32)
         with tf.GradientTape() as tape:
-            predictions = self.model([batch_images, encoder_masks, batch_targets, look_ahead_masks], training=True)
+            predictions = self.model(batch_images, batch_targets, encoder_masks, look_ahead_masks, training=True)
             loss = self.loss_fn(predictions, batch_targets)
             acc = accuracy_on_max_tokens(predictions, batch_targets)  # ta có thể sử dụng tf.metrics.CategoryAccuracy
         variables = self.model.trainable_variables
@@ -220,6 +273,28 @@ class TFTrainer(BaseTrainer):
             }
 
         if eval_val:
+            batch_total_loss = 0
+            cnt_true_char = 0
+            sum_batch = 0
+            with tqdm(total=train_steps_per_epoch, initial=0, ascii="->", colour='#1cd41c', position=0,
+                      leave=True) as pbar:
+                for index in range(0, train_steps_per_epoch):
+                    data = self.train_dataloader.next_batch()
+                    a, b, c = self._evalute_test(data)
+                    batch_total_loss += batch_loss
+                    cnt_true_char += batch_acc
+                    sum_batch += data[0].shape[0]
+
+                    print(a)
+                    print(b)
+                    print(c)
+                    print("================")
+
+                    pbar.update(1)
+                    pbar.set_postfix({
+                        "accuracy": "{:.4f}".format(batch_acc)
+                    })
+
             dict_result['validate'] = {
                 'total_loss': 0,
                 'accuracy': 0
@@ -228,7 +303,7 @@ class TFTrainer(BaseTrainer):
         return dict_result
 
     def train(self, epochs, steps_per_epoch, flag_evaluate_train=True, flag_evaluate_validate=False):
-        assert self.model is None, "Please compile Architecture when you start train."
+        assert self.model is not None, "Please compile Architecture when you start train."
         initial_epoch = self.schedule['epoch'].numpy()  # loading from schedule
         global_step = self.schedule['step'].numpy()
         initial_step = global_step % initial_epoch
@@ -266,7 +341,7 @@ class TFTrainer(BaseTrainer):
             if epoch % 5 == 0:
                 print("\nEvaluate Phase.")
                 result_eval = self.evalute_specifice_dataset(eval_train=True,
-                                                             eval_val=False,
+                                                             eval_val=True,
                                                              train_steps_per_epoch=steps_per_epoch)
 
                 if flag_evaluate_train:
